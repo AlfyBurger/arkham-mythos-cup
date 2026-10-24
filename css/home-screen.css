@@ -1,0 +1,5 @@
+/* Home Screen web app: keep the bottom tab bar above the iPhone home indicator */
+.tab-bar { height: calc(48px + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; }
+.app-content { padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px)); padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); }
+html, body { background-color: black; }
+.offline-status { text-align: center; font-size: 14px; color: #8b5e3b; margin-top: 10px; }
