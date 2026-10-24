@@ -1,9 +1,8 @@
 // Keeps a full copy of the app on the device so it runs offline.
 // The cache name changes automatically whenever any app file changes.
-const CACHE = "mythos-cup-bce099dca2cf";
+const CACHE = "mythos-cup-f64607529ae5";
 const ASSETS = [
  "./",
- ".nojekyll",
  "apple-touch-icon.png",
  "css/home-screen.css",
  "css/index.css",
