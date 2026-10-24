@@ -1,0 +1,57 @@
+name: Simulator check (launch + screenshots)
+
+on:
+  push:
+    branches: [arkham-ios]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen && xcodegen generate
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project MythosCup.xcodeproj -scheme MythosCup -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath simbuild \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -5
+      - name: Boot an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
+          c.sort(key=lambda x:x['name']); print([x for x in c if 'Pro' in x['name']][-1]['udid'] if any('Pro' in x['name'] for x in c) else c[-1]['udid'])")
+          echo "UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl list devices | grep "$UDID"
+      - name: Install, launch, screenshot
+        run: |
+          mkdir -p shots
+          APP=simbuild/Build/Products/Debug-iphonesimulator/MythosCup.app
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl launch "$UDID" io.github.alfyburger.ah3mythoscup
+          sleep 1; xcrun simctl io "$UDID" screenshot shots/0-launch.png
+          sleep 7; xcrun simctl io "$UDID" screenshot shots/1-english.png
+          # relaunch in Italian to check language detection + persistence
+          xcrun simctl terminate "$UDID" io.github.alfyburger.ah3mythoscup
+          xcrun simctl spawn "$UDID" defaults write -g AppleLanguages -array it
+          xcrun simctl spawn "$UDID" defaults write -g AppleLocale it_IT
+          xcrun simctl shutdown "$UDID"; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl launch "$UDID" io.github.alfyburger.ah3mythoscup
+          sleep 8; xcrun simctl io "$UDID" screenshot shots/2-relaunch-italian-locale.png
+          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "MythosCup"' --style compact > shots/app.log 2>&1 || true
+      - name: Publish screenshots to the arkham-ios-sim branch
+        if: always()
+        run: |
+          mkdir -p shots && cd shots
+          echo "${{ github.sha }} ${{ job.status }}" > RESULT.txt
+          git init -q -b arkham-ios-sim
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -qm "Simulator check of ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" arkham-ios-sim
