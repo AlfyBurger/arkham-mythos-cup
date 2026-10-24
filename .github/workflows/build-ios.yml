@@ -1,0 +1,59 @@
+name: Build iOS app (unsigned IPA for sideloading)
+
+on:
+  push:
+    branches: [arkham-ios]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tool versions
+        run: xcodebuild -version && sw_vers
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (no code signing; sideloading tools sign it)
+        run: |
+          set -o pipefail
+          xcodebuild -project MythosCup.xcodeproj -scheme MythosCup -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          test -d "build/Build/Products/Release-iphoneos/MythosCup.app"
+
+      - name: Package IPA
+        run: |
+          rm -rf out && mkdir -p out/Payload
+          cp -R build/Build/Products/Release-iphoneos/MythosCup.app out/Payload/
+          (cd out && zip -qry ../MythosCup.ipa Payload)
+          ls -la MythosCup.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MythosCup-ipa
+          path: MythosCup.ipa
+
+      - name: Publish result to the arkham-ios-build branch
+        if: always()
+        run: |
+          mkdir pub
+          cp MythosCup.ipa pub/ 2>/dev/null || true
+          cp build.log pub/ 2>/dev/null || echo "no build log" > pub/build.log
+          echo "${{ github.sha }} ${{ job.status }}" > pub/RESULT.txt
+          cd pub
+          git init -q -b arkham-ios-build
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A && git commit -qm "Build of ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" arkham-ios-build
