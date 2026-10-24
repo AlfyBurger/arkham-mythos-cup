@@ -2,7 +2,7 @@ name: Build iOS app (unsigned IPA for sideloading)
 
 on:
   push:
-    branches: [arkham-ios]
+    branches: [ios]
   workflow_dispatch:
 
 permissions:
@@ -44,7 +44,7 @@ jobs:
           name: MythosCup-ipa
           path: MythosCup.ipa
 
-      - name: Publish result to the arkham-ios-build branch
+      - name: Publish result to the ios-build branch
         if: always()
         run: |
           mkdir pub
@@ -52,8 +52,8 @@ jobs:
           cp build.log pub/ 2>/dev/null || echo "no build log" > pub/build.log
           echo "${{ github.sha }} ${{ job.status }}" > pub/RESULT.txt
           cd pub
-          git init -q -b arkham-ios-build
+          git init -q -b ios-build
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
           git add -A && git commit -qm "Build of ${{ github.sha }}"
-          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" arkham-ios-build
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" ios-build
